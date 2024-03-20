@@ -231,9 +231,17 @@ func TestRegexTemplate(t *testing.T) {
 }
 
 func TestVersionREwriteRegex(t *testing.T) {
-	change := "version: xyz"
 
-	original := `
+	testcases := []struct {
+		name     string
+		change   func(m regexp2.Match) string
+		original string
+		expected string
+	}{
+		{
+			name:   "no quotes",
+			change: func(m regexp2.Match) string { return "version: xyz" },
+			original: `
 version: abc
 version: 123 # do-not-rewrite
 test:
@@ -242,8 +250,8 @@ test:
       version: abc
 	foo:
       version: aiueo # no-rewrite
-`
-	expected := `
+`,
+			expected: `
 version: xyz
 version: 123 # do-not-rewrite
 test:
@@ -252,10 +260,42 @@ test:
       version: xyz
 	foo:
       version: aiueo # no-rewrite
-`
-	re := regexp2.MustCompile(versionRewriteRegex, 0)
-	result, err := re.Replace(original, change, 0, -1)
+`,
+		},
+		{
+			name:   "with quotes",
+			change: func(m regexp2.Match) string { return `version: "xyz"` },
 
-	assert.Nil(t, err)
-	assert.Equal(t, expected, result)
+			original: `
+version: abc
+version: 123 # do-not-rewrite
+test:
+  foo:
+    bar:
+      version: abc
+	foo:
+      version: aiueo # no-rewrite
+`,
+			expected: `
+version: "xyz"
+version: 123 # do-not-rewrite
+test:
+  foo:
+    bar:
+      version: "xyz"
+	foo:
+      version: aiueo # no-rewrite
+`,
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+
+			re := regexp2.MustCompile(versionRewriteRegex, 0)
+			result, err := re.ReplaceFunc(tc.original, tc.change, 0, -1)
+
+			assert.Nil(t, err)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
 }
